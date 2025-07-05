@@ -14,6 +14,8 @@ def main():
         print("Examples:")
         print("  Instagram: python test_downloader.py https://www.instagram.com/p/SHORTCODE/")
         print("  TikTok: python test_downloader.py https://www.tiktok.com/@username/video/1234567890123456789")
+        print("  YouTube: python test_downloader.py https://www.youtube.com/watch?v=VIDEO_ID")
+        print("  YouTube Shorts: python test_downloader.py https://www.youtube.com/shorts/VIDEO_ID")
         print("\nNote: Videos are cached for 24 hours. Run this script multiple times with the same URL to test the caching mechanism.")
         return
 
@@ -30,8 +32,10 @@ def main():
         file_path, error = downloader.download_instagram_video(url)
     elif "tiktok.com" in url or "vm.tiktok.com" in url:
         file_path, error = downloader.download_tiktok_video_sync(url)
+    elif "youtube.com" in url or "youtu.be" in url:
+        file_path, error = downloader.download_youtube_video(url)
     else:
-        file_path, error = None, "Unsupported platform. Please provide a link from Instagram or TikTok."
+        file_path, error = None, "Unsupported platform. Please provide a link from Instagram, TikTok, or YouTube."
 
     if file_path:
         print(f"Video available at: {file_path}")

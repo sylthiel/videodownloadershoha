@@ -3,6 +3,7 @@ Module for downloading videos from various social media platforms.
 Currently supports:
 - Instagram
 - TikTok
+- YouTube
 """
 
 import os
@@ -16,6 +17,7 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Optional, Tuple, Dict
 from TikTokApi import TikTokApi
+import yt_dlp
 
 
 class OutputCapture:
@@ -50,12 +52,14 @@ class VideoDownloader:
         self.download_dir = download_dir
         self.instagram_dir = os.path.join(download_dir, "instagram")
         self.tiktok_dir = os.path.join(download_dir, "tiktok")
+        self.youtube_dir = os.path.join(download_dir, "youtube")
         self.cache_file = os.path.join(download_dir, "cache_metadata.json")
         self.cache_duration = timedelta(days=cache_duration_days)
 
         # Create download directories if they don't exist
         os.makedirs(self.instagram_dir, exist_ok=True)
         os.makedirs(self.tiktok_dir, exist_ok=True)
+        os.makedirs(self.youtube_dir, exist_ok=True)
 
         # Initialize or load cache metadata
         self.cache_metadata = self._load_cache_metadata()
@@ -85,11 +89,13 @@ class VideoDownloader:
                         data["instagram"] = {}
                     if "tiktok" not in data:
                         data["tiktok"] = {}
+                    if "youtube" not in data:
+                        data["youtube"] = {}
                     return data
             except (json.JSONDecodeError, IOError):
                 # If the file is corrupted or can't be read, start with empty cache
-                return {"instagram": {}, "tiktok": {}}
-        return {"instagram": {}, "tiktok": {}}
+                return {"instagram": {}, "tiktok": {}, "youtube": {}}
+        return {"instagram": {}, "tiktok": {}, "youtube": {}}
 
     def _save_cache_metadata(self):
         """Save cache metadata to file."""
@@ -318,6 +324,82 @@ class VideoDownloader:
 
         except Exception as e:
             return None, f"Error downloading TikTok video: {str(e)}"
+
+    def download_youtube_video(self, url: str) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Download a video from YouTube or retrieve from cache if available.
+
+        Args:
+            url: The URL of the YouTube video or short.
+
+        Returns:
+            A tuple containing (file_path, error_message).
+            If successful, file_path will contain the path to the downloaded video and error_message will be None.
+            If unsuccessful, file_path will be None and error_message will contain the error message.
+        """
+        try:
+            # Extract the video ID from the URL
+            # YouTube URL formats:
+            # - https://www.youtube.com/watch?v=VIDEO_ID
+            # - https://youtu.be/VIDEO_ID
+            # - https://www.youtube.com/shorts/VIDEO_ID
+
+            video_id = None
+
+            if 'youtube.com/watch' in url and 'v=' in url:
+                video_id = url.split('v=')[1].split('&')[0]
+            elif 'youtu.be/' in url:
+                video_id = url.split('youtu.be/')[1].split('?')[0]
+            elif 'youtube.com/shorts/' in url:
+                video_id = url.split('youtube.com/shorts/')[1].split('?')[0]
+
+            if not video_id:
+                return None, "Invalid YouTube URL format. Could not extract video ID."
+
+            # Check if the video is in the cache
+            if "youtube" in self.cache_metadata and video_id in self.cache_metadata["youtube"]:
+                cache_entry = self.cache_metadata["youtube"][video_id]
+                file_path = cache_entry["file_path"]
+
+                # If the file exists, update the last_accessed time and return the path
+                if os.path.exists(file_path):
+                    print(f"Using cached video for YouTube ID: {video_id}")
+                    self._update_cache_entry("youtube", video_id, file_path)
+                    return file_path, None
+                else:
+                    # If the file doesn't exist, remove the entry from the cache
+                    del self.cache_metadata["youtube"][video_id]
+                    self._save_cache_metadata()
+
+            # If not in cache or file doesn't exist, download the video
+            print(f"Downloading video for YouTube ID: {video_id}")
+            file_path = os.path.join(self.youtube_dir, f"{video_id}.mp4")
+
+            # Configure yt-dlp options
+            ydl_opts = {
+                'format': 'best[ext=mp4]',
+                'outtmpl': file_path,
+                'quiet': True,
+                'no_warnings': True,
+                'ignoreerrors': True,
+            }
+
+            # Download the video
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                if info is None:
+                    return None, "Failed to extract video information."
+
+            # Check if the file was downloaded successfully
+            if not os.path.exists(file_path):
+                return None, "Failed to download the video."
+
+            # Update the cache metadata
+            self._update_cache_entry("youtube", video_id, file_path)
+            return file_path, None
+
+        except Exception as e:
+            return None, f"Error downloading YouTube video: {str(e)}"
 
     def download_tiktok_video_sync(self, url: str) -> Tuple[Optional[str], Optional[str]]:
         """

@@ -21,25 +21,29 @@ downloader = VideoDownloader()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
     await update.message.reply_text(
-        "Hi! I'm a video downloader bot. Send me a link to a video from Instagram or TikTok, "
+        "Hi! I'm a video downloader bot. Send me a link to a video from Instagram, TikTok, or YouTube, "
         "and I'll download it for you.\n\n"
         "You can also use the /download command followed by a link:\n"
-        "/download https://www.instagram.com/reel/SHORTCODE/\n\n"
+        "/download https://www.instagram.com/reel/SHORTCODE/\n"
+        "/download https://www.youtube.com/watch?v=VIDEO_ID\n\n"
         "Currently supported platforms:\n"
         "- Instagram (posts and reels)\n"
-        "- TikTok"
+        "- TikTok\n"
+        "- YouTube (videos and shorts)"
     )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /help is issued."""
     await update.message.reply_text(
-        "Send me a link to a video from Instagram or TikTok, and I'll download it for you.\n\n"
+        "Send me a link to a video from Instagram, TikTok, or YouTube, and I'll download it for you.\n\n"
         "You can also use the /download command followed by a link:\n"
-        "/download https://www.instagram.com/reel/SHORTCODE/\n\n"
+        "/download https://www.instagram.com/reel/SHORTCODE/\n"
+        "/download https://www.youtube.com/watch?v=VIDEO_ID\n\n"
         "Currently supported platforms:\n"
         "- Instagram (posts and reels)\n"
-        "- TikTok"
+        "- TikTok\n"
+        "- YouTube (videos and shorts)"
     )
 
 
@@ -52,12 +56,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await process_instagram_link(update, message_text)
     elif "tiktok.com" in message_text or "vm.tiktok.com" in message_text:
         await process_tiktok_link(update, message_text)
+    elif "youtube.com" in message_text or "youtu.be" in message_text:
+        await process_youtube_link(update, message_text)
     else:
         await update.message.reply_text(
             "Please send me a link to a video from a supported platform.\n\n"
             "Currently supported platforms:\n"
             "- Instagram (posts and reels)\n"
-            "- TikTok"
+            "- TikTok\n"
+            "- YouTube (videos and shorts)"
         )
 
 
@@ -120,6 +127,33 @@ async def process_tiktok_link(update: Update, url: str) -> None:
         await processing_message.edit_text(f"An error occurred: {error_message}")
 
 
+async def process_youtube_link(update: Update, url: str) -> None:
+    """Process a YouTube link and send the downloaded video."""
+    # Send a message to indicate that the bot is processing the request
+    processing_message = await update.message.reply_text("Downloading YouTube video... This may take a moment.")
+
+    try:
+        # Download the video or get it from cache
+        file_path, error = downloader.download_youtube_video(url)
+
+        if file_path:
+            # Send the video
+            with open(file_path, "rb") as video_file:
+                await update.message.reply_video(video=video_file)
+
+            # Delete the processing message
+            await processing_message.delete()
+
+            # Don't delete the file as it's now cached
+        else:
+            # Send an error message
+            await processing_message.edit_text(f"Error: {error}")
+
+    except Exception as e:
+        # Send an error message
+        await processing_message.edit_text(f"An error occurred: {str(e)}")
+
+
 async def download_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /download command."""
     # Check if the command has arguments
@@ -138,12 +172,15 @@ async def download_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await process_instagram_link(update, url)
     elif "tiktok.com" in url or "vm.tiktok.com" in url:
         await process_tiktok_link(update, url)
+    elif "youtube.com" in url or "youtu.be" in url:
+        await process_youtube_link(update, url)
     else:
         await update.message.reply_text(
             "Unsupported platform. Please provide a link from a supported platform.\n\n"
             "Currently supported platforms:\n"
             "- Instagram (posts and reels)\n"
-            "- TikTok"
+            "- TikTok\n"
+            "- YouTube (videos and shorts)"
         )
 
 

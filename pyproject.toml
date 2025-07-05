@@ -10,4 +10,5 @@ dependencies = [
     "instaloader",
     "tiktokapi",
     "playwright",
+    "yt-dlp",
 ]
