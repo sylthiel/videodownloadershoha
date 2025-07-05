@@ -1,0 +1,13 @@
+[project]
+name = "bots"
+version = "0.1.0"
+description = "Telegram bot for downloading videos from social media platforms"
+requires-python = ">=3.12"
+dependencies = [
+    "python-telegram-bot",
+    "requests",
+    "beautifulsoup4",
+    "instaloader",
+    "tiktokapi",
+    "playwright",
+]
