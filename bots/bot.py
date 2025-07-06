@@ -199,6 +199,11 @@ def main() -> None:
         logger.error("TELEGRAM_BOT_TOKEN environment variable not set")
         return
 
+    # Create a new downloader instance with cache clearing on startup
+    global downloader
+    downloader = VideoDownloader(clear_cache_on_startup=True)
+    logger.info("Initialized video downloader with cache clearing")
+
     # Create the Application
     application = Application.builder().token(token).build()
 

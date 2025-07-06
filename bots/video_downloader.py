@@ -41,13 +41,14 @@ class OutputCapture:
 class VideoDownloader:
     """Class for downloading videos from various social media platforms."""
 
-    def __init__(self, download_dir="downloads", cache_duration_days=1):
+    def __init__(self, download_dir="downloads", cache_duration_days=1, clear_cache_on_startup=True):
         """
         Initialize the VideoDownloader.
 
         Args:
             download_dir: Base directory for downloaded videos
             cache_duration_days: How long to keep videos in cache (in days)
+            clear_cache_on_startup: Whether to clear all cached downloads on startup
         """
         self.download_dir = download_dir
         self.instagram_dir = os.path.join(download_dir, "instagram")
@@ -64,8 +65,12 @@ class VideoDownloader:
         # Initialize or load cache metadata
         self.cache_metadata = self._load_cache_metadata()
 
-        # Clean up old cache entries on startup
-        self._cleanup_cache()
+        # Clear all cached downloads if requested
+        if clear_cache_on_startup:
+            self.clear_all_cached_downloads()
+        else:
+            # Just clean up old cache entries
+            self._cleanup_cache()
 
         self.instagram = instaloader.Instaloader(
             download_videos=True,
@@ -112,6 +117,26 @@ class VideoDownloader:
             "last_accessed": datetime.now().isoformat(),
         }
         self._save_cache_metadata()
+
+    def clear_all_cached_downloads(self):
+        """Clear all cached downloads and reset cache metadata."""
+        print("Clearing all cached downloads...")
+
+        # Remove all files in the cache directories
+        for platform_dir in [self.instagram_dir, self.tiktok_dir, self.youtube_dir]:
+            for filename in os.listdir(platform_dir):
+                file_path = os.path.join(platform_dir, filename)
+                if os.path.isfile(file_path):
+                    try:
+                        os.remove(file_path)
+                        print(f"Removed cached file: {file_path}")
+                    except OSError as e:
+                        print(f"Error removing file {file_path}: {e}")
+
+        # Reset cache metadata
+        self.cache_metadata = {"instagram": {}, "tiktok": {}, "youtube": {}}
+        self._save_cache_metadata()
+        print("Cache cleared successfully")
 
     def _cleanup_cache(self):
         """Remove old videos from cache."""
@@ -203,8 +228,14 @@ class VideoDownloader:
                     sys.stdout = original_stdout
 
                 # Look for the video file path in the captured output
-                # The pattern is typically something like: [Post text] /path/to/file.mp4
+                # Try different patterns to match the file path
+
+                # Pattern 1: [Post text] /path/to/file.mp4
                 video_path_match = re.search(r'\] (.*?\.mp4)', captured_output)
+
+                # Pattern 2: Direct path /path/to/file.mp4
+                if not video_path_match:
+                    video_path_match = re.search(r'(\/.*?\.mp4)', captured_output)
 
                 if video_path_match:
                     # Extract the video file path
@@ -212,21 +243,61 @@ class VideoDownloader:
 
                     # Copy the file to the organized directory
                     try:
-                        with open(video_path, 'rb') as src_file:
-                            with open(file_path, 'wb') as dst_file:
-                                dst_file.write(src_file.read())
+                        if os.path.exists(video_path):
+                            with open(video_path, 'rb') as src_file:
+                                with open(file_path, 'wb') as dst_file:
+                                    dst_file.write(src_file.read())
 
-                        # Update the cache metadata
-                        self._update_cache_entry("instagram", shortcode, file_path)
-                        return file_path, None
+                            # Update the cache metadata
+                            self._update_cache_entry("instagram", shortcode, file_path)
+                            return file_path, None
+                        else:
+                            print(f"Found path in output but file does not exist: {video_path}")
                     except FileNotFoundError:
-                        return None, f"Video file not found at path: {video_path}"
+                        print(f"Video file not found at path: {video_path}")
                     except Exception as e:
-                        return None, f"Error copying video file: {str(e)}"
+                        print(f"Error copying video file: {str(e)}")
+
+                # If we couldn't find or access the file using the regex patterns, print the captured output for debugging
+                print(f"Captured output: {captured_output}")
+
+                # Try to extract any path that might contain a .mp4 file
+                all_paths = re.findall(r'([^\s]*?\.mp4)', captured_output)
+                for potential_path in all_paths:
+                    print(f"Checking potential path: {potential_path}")
+
+                    # Try the path as-is
+                    if os.path.exists(potential_path):
+                        try:
+                            with open(potential_path, 'rb') as src_file:
+                                with open(file_path, 'wb') as dst_file:
+                                    dst_file.write(src_file.read())
+
+                            # Update the cache metadata
+                            self._update_cache_entry("instagram", shortcode, file_path)
+                            return file_path, None
+                        except Exception as e:
+                            print(f"Error copying from potential path {potential_path}: {str(e)}")
+
+                    # Try joining with temp_dir if it's a relative path
+                    full_path = os.path.join(temp_dir, os.path.basename(potential_path))
+                    if os.path.exists(full_path):
+                        try:
+                            with open(full_path, 'rb') as src_file:
+                                with open(file_path, 'wb') as dst_file:
+                                    dst_file.write(src_file.read())
+
+                            # Update the cache metadata
+                            self._update_cache_entry("instagram", shortcode, file_path)
+                            return file_path, None
+                        except Exception as e:
+                            print(f"Error copying from joined path {full_path}: {str(e)}")
 
                 # If we couldn't find the video path in the output, try the old method
+                print(f"Looking for .mp4 files in temporary directory: {temp_dir}")
                 for file in os.listdir(temp_dir):
                     if file.endswith('.mp4'):
+                        print(f"Found .mp4 file in temp dir: {file}")
                         # Copy the file from the temporary directory to the organized directory
                         with open(os.path.join(temp_dir, file), 'rb') as src_file:
                             with open(file_path, 'wb') as dst_file:
