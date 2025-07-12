@@ -527,7 +527,9 @@ class VideoDownloader:
 
             # Run the async download method in the new loop
             try:
-                return loop.run_until_complete(self.download_tiktok_video(url))
+                # Create the coroutine object first, then pass it to run_until_complete
+                coro = self.download_tiktok_video(url)
+                return loop.run_until_complete(coro)
             finally:
                 # Clean up the loop
                 loop.close()

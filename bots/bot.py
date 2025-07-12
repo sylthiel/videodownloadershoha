@@ -103,7 +103,8 @@ async def process_tiktok_link(update: Update, url: str) -> None:
 
     try:
         # Download the video or get it from cache
-        file_path, error = downloader.download_tiktok_video_sync(url)
+        # Use the async version directly since we're already in an async context
+        file_path, error = await downloader.download_tiktok_video(url)
 
         if file_path:
             # Send the video
